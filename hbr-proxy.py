@@ -38,6 +38,7 @@ async def handler(request):
             if resp.headers.get('content-type', '').startswith('text/'):
                 payload = await resp.text()
                 payload = change_rex.sub(r'\1\2™\3', payload)
+                payload = payload.replace('https://habrahabr.ru/', '/')
             else:
                 payload = await resp.read()
 
