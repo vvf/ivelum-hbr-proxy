@@ -3,21 +3,31 @@
 # I wanted to learn more about async/await and asyncio, so this issue was chance to do it in this context
 
 import asyncio
-import json
-
 import aiohttp
 from aiohttp import web
 from urllib.parse import urljoin
 import logging
-
-from aiohttp.connector import TCPConnector
+import re
+import bs4
 
 logger = logging.getLogger(__name__)
 
 BASE_URL = 'https://habrahabr.ru/'
-import re
 
-change_rex = re.compile(r'(\s)([a-zA-ZА-Яа-я]{6})(\s)', re.IGNORECASE)
+change_rex = re.compile(r'(^|\s)([a-zA-ZА-Яа-я]{6})(\s|$)', re.IGNORECASE)
+
+
+def do_replaces(soup):
+    if soup.name and soup.name.lower() in {'script', 'style'}:
+        return
+    for node in soup.children:
+        if isinstance(node, bs4.NavigableString):
+            new_val, replaces_count = change_rex.subn(r'\1\2™\3', str(node))
+            if replaces_count > 0:
+                node.replace_with(bs4.NavigableString(new_val))
+        else:
+            do_replaces(node)
+    return
 
 
 async def handler(request):
@@ -35,10 +45,13 @@ async def handler(request):
                 verify_ssl=False
         ) as resp:
             headers2 = resp.headers.copy()
-            if resp.headers.get('content-type', '').startswith('text/'):
+            if resp.headers.get('content-type', '').lower().startswith('text/html'):
                 payload = await resp.text()
-                payload = change_rex.sub(r'\1\2™\3', payload)
+                # payload = change_rex.sub(r'\1\2™\3', payload)
                 payload = payload.replace('https://habrahabr.ru/', '/')
+                soup = bs4.BeautifulSoup(payload, 'html.parser')
+                do_replaces(soup)
+                payload = str(soup).replace('&amp;plus;', '&plus;')
             else:
                 payload = await resp.read()
 
